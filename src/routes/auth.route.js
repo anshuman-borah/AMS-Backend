@@ -1,10 +1,9 @@
 import { Router } from 'express';
+import  loginController  from '../controllers/login.controller.js';
 
 const router = Router();
 
-router.get('/login',(req, res) => {
-    res.status(200).json({ message: "Login route" });
-})
+router.get('/login',loginController);
 
 export default router;
 
