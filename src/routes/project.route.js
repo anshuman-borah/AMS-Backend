@@ -19,9 +19,9 @@ import {
 const router = Router();
 
 router.post(
-  "/create", 
-  authMiddleware, 
-  validate(createProjectSchema), 
+  "/create",
+  authMiddleware,
+  validate(createProjectSchema),
   createProject
 );
 
@@ -32,14 +32,13 @@ router.patch(
   updateProject
 );
 
-// Fixed the missing ); here
 router.patch(
   "/:id/submit",
   authMiddleware,
   submitProject
 );
 
-// Kept your teammate's new route
+
 router.put(
   "/assign-reviewer/:projectId",
   authMiddleware,
