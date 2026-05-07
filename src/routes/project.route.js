@@ -5,7 +5,6 @@ import {
   updateProject,
   submitProject
 } from "../controllers/project.controller.js";
-
 import assignReviewer from "../controllers/assignReviewer.controller.js";
 
 import authMiddleware from "../middlewares/auth.middleware.js";
@@ -38,6 +37,7 @@ router.patch(
   authMiddleware,
   submitProject
 );
+
 
 router.put(
   "/assign-reviewer/:projectId",
