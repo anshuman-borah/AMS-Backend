@@ -1,5 +1,6 @@
 import Project from "../models/project.schema.js";
 import ApiError from "../utils/ApiError.js";
+import { runSimilarityCheckInBackground } from "../services/similarity.worker.js";
 
 export const createProject = async (req, res, next) => {
   try {
@@ -9,7 +10,11 @@ export const createProject = async (req, res, next) => {
       status: "DRAFT"           
     };
 
+    // Save project to database
     const savedProject = await Project.create(projectData);
+
+    // Run similarity check in background without awaiting
+    runSimilarityCheckInBackground(savedProject._id, projectData);
 
     return res.status(201).json({
       message: "Project created successfully",
@@ -19,13 +24,19 @@ export const createProject = async (req, res, next) => {
         status: savedProject.status,
         ownerId: savedProject.ownerId,
         createdAt: savedProject.createdAt
-      }
+      },
+      similarityStatus: "processing"
     });
 
   } catch (error) {
     next(error); 
   }
 };
+
+
+
+
+
 
 export const updateProject = async (req, res, next) => {
   try {
@@ -77,6 +88,11 @@ export const updateProject = async (req, res, next) => {
     next(error);
   }
 };
+
+
+
+
+
 
 export const submitProject = async (req, res, next) => {
   try {

@@ -2,38 +2,52 @@ import Similarity from "../models/similarity.schema.js";
 import Project from "../models/project.schema.js";
 import ApiError from "../utils/ApiError.js";
 
-export const getProjectSimilarity = async (req, res, next) => {
+
+
+export const getSimilarityStatus = async (req, res, next) => {
   try {
     const { projectId } = req.params;
-
-    // Check if the project actually exists
+    const userId = req.user.userId;
+    
+    // Check if user owns this project
     const project = await Project.findById(projectId);
     if (!project) {
-      throw new ApiError("Project not found", 404);
-    }
-
-    // Only the owner, Admin, Reviewer can view this
-    const isOwner = project.ownerId.toString() === req.user.userId;
-    const isPrivilegedUser = ["ADMIN", "REVIEWER"].includes(req.user.role);
-
-    if (!isOwner && !isPrivilegedUser) {
-      throw new ApiError("Unauthorized to view this similarity report", 403);
+      return res.status(404).json({ message: "Project not found" });
     }
     
-    
-    const similarityReport = await Similarity.findOne({ projectId })
-      .populate("matches.projectId", "title status ownerId"); // Title of the matched projects!
-
-    if (!similarityReport) {
-      throw new ApiError("Similarity report not found for this project", 404);
+    if (project.ownerId.toString() !== userId && req.user.role !== 'ADMIN') {
+      return res.status(403).json({ message: "Access denied" });
     }
-
+    
+    // Find similarity results
+    const similarity = await Similarity.findOne({ projectId })
+      .populate('matches.projectId', 'title');
+    
+    if (!similarity) {
+      return res.status(200).json({
+        status: "PENDING",
+        message: "Similarity check is still in progress or not started yet."
+      });
+    }
+    
+    // Return results
     return res.status(200).json({
-      message: "Similarity report fetched successfully",
-      similarity: similarityReport
+      status: "COMPLETED",
+      similarityScore: similarity.similarityScore,
+      riskLevel: getRiskLevel(similarity.similarityScore),
+      matches: similarity.matches.slice(0, 3).map(match => ({
+        title: match.projectId.title,
+        score: match.score
+      }))
     });
-
+    
   } catch (error) {
     next(error);
   }
+};
+
+const getRiskLevel = (score) => {
+  if (score >= 85) return "HIGH";
+  if (score >= 70) return "MEDIUM";
+  return "LOW";
 };
