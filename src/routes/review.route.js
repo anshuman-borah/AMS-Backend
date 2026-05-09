@@ -4,6 +4,7 @@ import { validate } from "../middlewares/validate.middleware.js";
 import { submitReviewSchema } from "../validators/review.validator.js";
 import submitReviewController from "../controllers/submitReview.controller.js";
 import getReviewerDashboard from "../controllers/getReviewerDashboard.controller.js";
+import getAssignedProjects from "../controllers/getAssignedProjects.controller.js";
 
 // import {
 //   getAssignedProjects,
@@ -24,7 +25,7 @@ router.use(roleMiddleware("REVIEWER"));
 router.get("/dashboard", getReviewerDashboard);
 
 // // Get all assigned projects
-// router.get("/assigned-projects", getAssignedProjects);
+router.get("/assigned-projects", getAssignedProjects);
 
 // // Get specific project for review
 // router.get("/project/:projectId", getProjectForReview);
