@@ -39,7 +39,7 @@ async function loginUser(req, res, next) {
         role: savedUser.role 
       },
       process.env.JWT_SECRET,
-      { expiresIn: "1d" }
+      { expiresIn: "90d" }
     );
 
     // Return success response
