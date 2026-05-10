@@ -17,14 +17,14 @@ import Review from "../models/review.schema.js";
     const recentProposals = await Project.find({ ownerId: scientistId })
       .sort({ createdAt: -1 })
       .limit(5)
-      .select("title status createdAt similarityScore");
+      .select("title status createdAt similarityScore discipline");
 
     // Get recent reviews/comments on scientist's proposals
     const recentReviews = await Review.find()
       .populate({
         path: "projectId",
         match: { ownerId: scientistId },
-        select: "title"
+        select: "title discipline"
       })
       .populate("reviewerId", "name email")
       .sort({ createdAt: -1 })
@@ -43,6 +43,7 @@ import Review from "../models/review.schema.js";
       recentProposals: recentProposals.map(proposal => ({
         id: proposal._id,
         title: proposal.title,
+        discipline: proposal.discipline || "Not specified",
         status: proposal.status,
         similarityScore: proposal.similarityScore || 0,
         submittedDate: proposal.createdAt
@@ -50,6 +51,7 @@ import Review from "../models/review.schema.js";
       recentReviews: filteredReviews.map(review => ({
         proposalTitle: review.projectId.title,
         decision: review.decision,
+        discipline: review.projectId.discipline || "Not specified",
         comment: review.comment,
         reviewedBy: review.reviewerId.name,
         reviewedAt: review.createdAt
