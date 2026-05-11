@@ -7,6 +7,7 @@ import reviewRouter from './routes/review.route.js';
 import errorMiddleware from './middlewares/error.middleware.js';
 import dashboardRouter from './routes/dashboard.route.js';
 import scientistRouter from './routes/scientist.route.js';
+import adminRouter from './routes/admin.route.js';
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -17,7 +18,9 @@ app.use("/api/projects", projectRouter);
 app.use("/api/similarity", similarityRouter);
 app.use("/api/reviews", reviewRouter);
 app.use("/api/scientist",scientistRouter);
+app.use("/api/admin", adminRouter); // Admin dashboard routes (user management, stats)
 app.use("/api/dashboard", dashboardRouter);
+
 app.get("/health", (req, res) => {
     res.status(200).json({ status: "ok" });
 });
