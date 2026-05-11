@@ -40,7 +40,7 @@ export const createProject = async (req, res, next) => {
 
 export const updateProject = async (req, res, next) => {
   try {
-    const project = await Project.findById(req.params.id);
+    const project = await Project.findById(req.params.projectId);
 
     if (!project) {
       throw new ApiError("Project not found", 404);
@@ -77,7 +77,7 @@ export const updateProject = async (req, res, next) => {
     return res.status(200).json({
       message: "Project updated successfully",
       project: {
-        id: updatedProject._id,
+        projectId: updatedProject._id,
         title: updatedProject.title,
         status: updatedProject.status,
         updatedAt: updatedProject.updatedAt,
