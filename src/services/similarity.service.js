@@ -2,7 +2,7 @@ import axios from 'axios';
 import Similarity from '../models/similarity.schema.js';
 import Project from '../models/project.schema.js';
 
-const SIMILARITY_SERVER_URL = "https://rummage-upcountry-diving.ngrok-free.dev" || 'http://localhost:5000';
+const SIMILARITY_SERVER_URL = process.env.SURL || 'http://localhost:5000';
 
 export const checkSimilarityWithPythonServer = async (projectData) => {
   try {
