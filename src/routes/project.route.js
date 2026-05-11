@@ -27,7 +27,7 @@ router.post(
 );
 
 router.patch(
-  "/:id",
+  "/:projectId",
   authMiddleware,
   validate(createProjectSchema),
   updateProject
