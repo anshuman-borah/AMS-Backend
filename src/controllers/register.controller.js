@@ -11,8 +11,8 @@ async function registerController(req, res, next) {
       throw new ApiError(parsed.error.issues[0].message, 400);
     }
 
-    // Remove password from frontend input
-    const { name, email, role } = parsed.data;
+    // Destructure with defaults
+    const { name, email, role, expertise, institution, department } = parsed.data;
 
     // Default password
     const defaultPassword = "default1234";
@@ -27,13 +27,29 @@ async function registerController(req, res, next) {
     // Hash default password
     const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
-    // Create user
-    const user = await User.create({
+    // Build user data object
+    const userData = {
       name,
       email,
       password: hashedPassword,
-      role
-    });
+      role,
+      isActive: true, // Default to active
+    };
+
+    // Add role-specific fields
+    if (role === "REVIEWER") {
+      if (!expertise || expertise.length === 0) {
+        throw new ApiError("Expertise is required for reviewers", 400);
+      }
+      userData.expertise = expertise;
+    }
+
+    // Add optional fields if provided
+    if (institution) userData.institution = institution;
+    if (department) userData.department = department;
+
+    // Create user
+    const user = await User.create(userData);
 
     return res.status(201).json({
       message: "User registered successfully",
@@ -42,10 +58,12 @@ async function registerController(req, res, next) {
         id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role
-      }
+        role: user.role,
+        institution: user.institution,
+        department: user.department,
+        ...(user.role === "REVIEWER" && { expertise: user.expertise })
+      },
     });
-
   } catch (error) {
     next(error);
   }
