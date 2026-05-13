@@ -5,7 +5,7 @@ const allowedExpertise = [
   "AGRICULTURE",
   "BIOTECHNOLOGY",
   "MECHANICAL",
-  "CIVIL",
+  "Civil",
   "Soil Science",
   "Crop Science",
   "Forestry",
