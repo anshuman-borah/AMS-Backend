@@ -29,40 +29,17 @@ const getProjectForReview = async (req, res, next) => {
       throw new ApiError("This project is not assigned to you", 403);
     }
 
-    // Check if project status is SUBMITTED or UNDER_REVIEW (updated from PENDING)
-    if (project.status !== "SUBMITTED" && project.status !== "UNDER_REVIEW") {
-      throw new ApiError(`This project cannot be reviewed. Current status: ${project.status}`, 400);
-    }
+    // REMOVED status check - Reviewer can view project regardless of status
+    // Only submission will be restricted based on status
 
     // Check if project is already reviewed
     const existingReview = await Review.findOne({ projectId, reviewerId });
-    if (existingReview) {
-      return res.status(200).json({
-        project: {
-          id: project._id,
-          uniqueCode: project.uniqueCode,
-          title: project.title,
-          discipline: project.discipline,
-          stationOrCollege: project.stationOrCollege,
-          introduction: project.introduction,
-          actionPlan: project.actionPlan,
-          expectedOutcome: project.expectedOutcome,
-          objectives: project.objectives,
-          budget: project.budget,
-          scientistInvolve: project.scientistInvolve,
-          status: project.status,
-          submittedBy: {
-            id: project.ownerId._id,
-            name: project.ownerId.name,
-            email: project.ownerId.email,
-            institution: project.ownerId.institution,
-            department: project.ownerId.department
-          }
-        },
-        review: existingReview,
-        alreadyReviewed: true
-      });
-    }
+    
+    // Determine if reviewer can submit review (only for SUBMITTED or UNDER_REVIEW status)
+    const canSubmitReview = project.status === "SUBMITTED" || project.status === "UNDER_REVIEW";
+    
+    // Determine if review is already submitted
+    const isAlreadyReviewed = !!existingReview;
 
     return res.status(200).json({
       project: {
@@ -71,6 +48,7 @@ const getProjectForReview = async (req, res, next) => {
         title: project.title,
         discipline: project.discipline,
         stationOrCollege: project.stationOrCollege,
+        year: project.year,
         introduction: project.introduction,
         actionPlan: project.actionPlan,
         expectedOutcome: project.expectedOutcome,
@@ -78,15 +56,30 @@ const getProjectForReview = async (req, res, next) => {
         budget: project.budget,
         scientistInvolve: project.scientistInvolve,
         status: project.status,
+        similarityScore: project.similarityScore,
+        finalComment: project.finalComment,
+        submittedAt: project.submittedAt,
+        assignedAt: project.assignedAt,
+        underReviewAt: project.underReviewAt,
+        approvedAt: project.approvedAt,
+        rejectedAt: project.rejectedAt,
+        revisionRequestedAt: project.revisionRequestedAt,
         submittedBy: {
           id: project.ownerId._id,
           name: project.ownerId.name,
           email: project.ownerId.email,
           institution: project.ownerId.institution,
           department: project.ownerId.department
-        }
+        },
+        assignedReviewer: project.assignedReviewerId ? {
+          id: project.assignedReviewerId._id,
+          name: project.assignedReviewerId.name,
+          email: project.assignedReviewerId.email
+        } : null
       },
-      alreadyReviewed: false
+      review: existingReview || null,
+      alreadyReviewed: isAlreadyReviewed,
+      canSubmitReview: canSubmitReview && !isAlreadyReviewed // Can only submit if status allows and not already reviewed
     });
     
   } catch (error) {
