@@ -59,12 +59,12 @@ router.get(
 );
 
 router.get(
-  "/projects/:projectId",
+  "/projects/id/:projectId",
   getProjectById
 );
 
 router.delete(
-  "/projects/:projectId",
+  "/projects/id/:projectId",
   deleteProject
 );
 
