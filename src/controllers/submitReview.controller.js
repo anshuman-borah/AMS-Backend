@@ -13,7 +13,7 @@ const submitReview = async (req, res, next) => {
     const { decision, comment } = req.body;
     const reviewerId = req.user.userId;
 
-    // Validate input - updated to include REVISION_REQUIRED
+    // Validate input
     if (!decision || !["APPROVED", "REJECTED", "REVISION_REQUIRED"].includes(decision)) {
       throw new ApiError("Invalid decision. Must be APPROVED, REJECTED, or REVISION_REQUIRED", 400);
     }
@@ -39,18 +39,32 @@ const submitReview = async (req, res, next) => {
       throw new ApiError("This project is not assigned to you", 403);
     }
 
-    // Check if project status is SUBMITTED or UNDER_REVIEW (updated from PENDING)
-    if (project.status !== "SUBMITTED" && project.status !== "UNDER_REVIEW") {
-      throw new ApiError(`Cannot review project with status: ${project.status}`, 400);
+    // Check if project status is UNDER_REVIEW (only allow review when actively under review)
+    if (project.status !== "UNDER_REVIEW") {
+      throw new ApiError(`Cannot review project with status: ${project.status}. Project must be UNDER_REVIEW.`, 400);
     }
 
-    // Check if review already exists
-    const existingReview = await Review.findOne({ projectId, reviewerId }).session(session);
-    if (existingReview) {
-      throw new ApiError("You have already reviewed this project", 400);
+    // Check if there's already a review for the CURRENT review cycle
+    // Get the latest review from this reviewer
+    const latestReview = await Review.findOne({ projectId, reviewerId })
+      .sort({ reviewedAt: -1 })
+      .session(session);
+    
+    // If there's a review and no revision was requested after it, prevent duplicate
+    if (latestReview) {
+      // Check if this review was submitted after the last revision request
+      if (project.revisionRequestedAt) {
+        // If revision was requested, allow new review only if the last review is BEFORE the revision request
+        if (new Date(latestReview.reviewedAt) > new Date(project.revisionRequestedAt)) {
+          throw new ApiError("You have already reviewed this version. Please wait for the scientist to resubmit.", 400);
+        }
+      } else {
+        // No revision requested yet, so any existing review means already reviewed
+        throw new ApiError("You have already reviewed this project", 400);
+      }
     }
 
-    // Create review with reviewedAt field
+    // Create review
     const review = await Review.create([{
       projectId,
       reviewerId,
@@ -69,8 +83,9 @@ const submitReview = async (req, res, next) => {
       updateData.rejectedAt = new Date();
       updateData.finalComment = comment.trim();
     } else if (decision === "REVISION_REQUIRED") {
-      updateData.revisionRequestedAt = new Date(); // Set revision requested timestamp
+      updateData.revisionRequestedAt = new Date();
       updateData.finalComment = comment.trim();
+      // Keep status as REVISION_REQUIRED (scientist needs to make changes)
     }
     
     const updatedProject = await Project.findByIdAndUpdate(
