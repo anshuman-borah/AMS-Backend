@@ -3,6 +3,19 @@ import Review from "../models/review.schema.js";
 import User from "../models/user.schema.js";
 import ApiError from "../utils/ApiError.js";
 
+// Helper function to get status description
+const getStatusDescription = (status) => {
+  const descriptions = {
+    DRAFT: "Proposal is being prepared by the scientist",
+    SUBMITTED: "Proposal submitted, waiting for reviewer assignment",
+    UNDER_REVIEW: "Proposal is currently being reviewed",
+    APPROVED: "Proposal has been approved",
+    REJECTED: "Proposal has been rejected",
+    REVISION_REQUIRED: "Changes requested, waiting for resubmission"
+  };
+  return descriptions[status] || "Unknown status";
+};
+
 // Get a single project details for review
 const getProjectForReview = async (req, res, next) => {
   try {
@@ -29,17 +42,41 @@ const getProjectForReview = async (req, res, next) => {
       throw new ApiError("This project is not assigned to you", 403);
     }
 
-    // REMOVED status check - Reviewer can view project regardless of status
-    // Only submission will be restricted based on status
-
-    // Check if project is already reviewed
-    const existingReview = await Review.findOne({ projectId, reviewerId });
+    // Get the latest review from this reviewer
+    const latestReview = await Review.findOne({ projectId, reviewerId }).sort({ reviewedAt: -1 });
     
-    // Determine if reviewer can submit review (only for SUBMITTED or UNDER_REVIEW status)
-    const canSubmitReview = project.status === "SUBMITTED" || project.status === "UNDER_REVIEW";
+    // Determine if reviewer can submit a review
+    // A reviewer can submit review if:
+    // 1. Project status is UNDER_REVIEW (active review)
+    // 2. OR (Project status is SUBMITTED AND this reviewer is assigned - for first review)
+    let canSubmitReview = false;
     
-    // Determine if review is already submitted
-    const isAlreadyReviewed = !!existingReview;
+    if (project.status === "UNDER_REVIEW") {
+      // For UNDER_REVIEW, always allow review (for revision cycles)
+      canSubmitReview = true;
+    } else if (project.status === "SUBMITTED" && project.assignedReviewerId?._id.toString() === reviewerId) {
+      // First-time review before any review is submitted
+      canSubmitReview = true;
+    }
+    
+    // Check if there's already a review for the current review cycle
+    // For revision cycles, we need to check if there's a review AFTER the last revision request
+    let hasReviewedThisCycle = false;
+    
+    if (latestReview) {
+      if (project.revisionRequestedAt) {
+        // If revision was requested, check if review was submitted after revision
+        hasReviewedThisCycle = new Date(latestReview.reviewedAt) > new Date(project.revisionRequestedAt);
+      } else {
+        // No revision yet, so any review means already reviewed
+        hasReviewedThisCycle = true;
+      }
+    }
+    
+    // If already reviewed this cycle, cannot submit again
+    if (hasReviewedThisCycle) {
+      canSubmitReview = false;
+    }
 
     // Get all reviews for this project (history)
     const allReviews = await Review.find({ projectId })
@@ -121,9 +158,9 @@ const getProjectForReview = async (req, res, next) => {
       },
       
       // Review information
-      review: existingReview || null,
-      alreadyReviewed: isAlreadyReviewed,
-      canSubmitReview: canSubmitReview && !isAlreadyReviewed,
+      review: latestReview || null,
+      alreadyReviewed: hasReviewedThisCycle,
+      canSubmitReview: canSubmitReview,
       
       // All review history
       reviewHistory: allReviews.map(review => ({
@@ -144,7 +181,7 @@ const getProjectForReview = async (req, res, next) => {
       statusInfo: {
         currentStatus: project.status,
         statusDescription: getStatusDescription(project.status),
-        canReview: canSubmitReview && !isAlreadyReviewed,
+        canReview: canSubmitReview,
         isPending: project.status === "SUBMITTED" || project.status === "UNDER_REVIEW",
         isCompleted: project.status === "APPROVED" || project.status === "REJECTED",
         isRevisionRequired: project.status === "REVISION_REQUIRED"
@@ -154,19 +191,6 @@ const getProjectForReview = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-};
-
-// Helper function to get status description
-const getStatusDescription = (status) => {
-  const descriptions = {
-    DRAFT: "Proposal is being prepared by the scientist",
-    SUBMITTED: "Proposal submitted, waiting for reviewer assignment",
-    UNDER_REVIEW: "Proposal is currently being reviewed",
-    APPROVED: "Proposal has been approved",
-    REJECTED: "Proposal has been rejected",
-    REVISION_REQUIRED: "Changes requested, waiting for resubmission"
-  };
-  return descriptions[status] || "Unknown status";
 };
 
 export default getProjectForReview;

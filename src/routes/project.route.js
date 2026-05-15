@@ -3,7 +3,7 @@ import { Router } from "express";
 import {
   createProject,
   updateProject,
-  submitProject
+  resubmitProject
 } from "../controllers/project.controller.js";
 import { getSimilarityStatus } from "../controllers/similarity.controller.js";
 import assignReviewer from "../controllers/assignReviewer.controller.js";
@@ -27,16 +27,16 @@ router.post(
 );
 
 router.patch(
-  "/:projectId",
+  "/update/:projectId",
   authMiddleware,
   validate(createProjectSchema),
   updateProject
 );
 
 router.patch(
-  "/:id/submit",
+  "/resubmit/:projectId",
   authMiddleware,
-  submitProject
+  resubmitProject
 );
 
 

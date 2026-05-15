@@ -1,6 +1,7 @@
 import Project from "../models/project.schema.js";
 import ApiError from "../utils/ApiError.js";
 import { runSimilarityCheckInBackground } from "../services/similarity.worker.js";
+import mongoose from "mongoose";
 
 // Helper to abbreviate strings (e.g., "COMPUTER_SCIENCE" -> "CS", "Delhi" -> "DEL")
 const getAbbreviation = (str) => {
@@ -81,10 +82,10 @@ export const updateProject = async (req, res, next) => {
       throw new ApiError("Unauthorized access", 403);
     }
 
-    // Only draft projects are editable
-    if (project.status !== "DRAFT") {
+    // Allow editing for DRAFT or REVISION_REQUIRED status
+    if (project.status !== "DRAFT" && project.status !== "REVISION_REQUIRED") {
       throw new ApiError(
-        "Only draft projects can be edited",
+        `Only draft or revision required projects can be edited. Current status: ${project.status}`,
         400
       );
     }
@@ -92,7 +93,7 @@ export const updateProject = async (req, res, next) => {
     // SAFE deep merge
     project.set(req.body);
 
-    // Recalculate budget grand total AFTER merge (using new schema field names)
+    // Recalculate budget grand total AFTER merge
     if (project.budget) {
       project.budget.grandTotal =
         (project.budget.nonRecurring || 0) +
@@ -102,15 +103,25 @@ export const updateProject = async (req, res, next) => {
         (project.budget.manpower || 0);
     }
 
+    // If project was in REVISION_REQUIRED status, increment version
+    let versionUpdated = false;
+    if (project.status === "REVISION_REQUIRED") {
+      project.version = (project.version || 1) + 1;
+      versionUpdated = true;
+    }
+
     const updatedProject = await project.save();
 
     return res.status(200).json({
-      message: "Project updated successfully",
+      message: versionUpdated 
+        ? "Project updated successfully. Version incremented. Please resubmit for review."
+        : "Project updated successfully",
       project: {
         projectId: updatedProject._id,
         uniqueCode: updatedProject.uniqueCode,
         title: updatedProject.title,
         status: updatedProject.status,
+        version: updatedProject.version,
         updatedAt: updatedProject.updatedAt,
       }
     });
@@ -120,68 +131,70 @@ export const updateProject = async (req, res, next) => {
   }
 };
 
-export const submitProject = async (req, res, next) => {
+export const resubmitProject = async (req, res, next) => {
   try {
-    const project = await Project.findById(req.params.id);
+    const { projectId } = req.params;
+    const { keepSameReviewer = true } = req.body; // Frontend can send this
+    
+    const project = await Project.findById(projectId);
 
     if (!project) {
       throw new ApiError("Project not found", 404);
     }
 
-    // Only owner can submit
+    // Only owner can resubmit
     if (project.ownerId.toString() !== req.user.userId) {
       throw new ApiError("Unauthorized access", 403);
     }
 
-    // Only drafts can be submitted
-    if (project.status !== "DRAFT") {
+    // Only REVISION_REQUIRED projects can be resubmitted
+    if (project.status !== "REVISION_REQUIRED") {
       throw new ApiError(
-        "Project already submitted",
+        `Only revision required projects can be resubmitted. Current status: ${project.status}`,
         400
       );
     }
 
-    // Check if project is complete (using new schema fields)
+    // Validate completeness
     if (!project.title || !project.introduction || !project.actionPlan || !project.expectedOutcome) {
-      throw new ApiError(
-        "Project is incomplete. Please fill all required fields before submission.",
-        400
-      );
+      throw new ApiError("Project is incomplete. Please fill all required fields.", 400);
     }
-
     if (!project.objectives || project.objectives.length === 0) {
-      throw new ApiError(
-        "Project is incomplete. At least one objective is required before submission.",
-        400
-      );
+      throw new ApiError("At least one objective is required.", 400);
     }
 
-    if (!project.stationOrCollege) {
-      throw new ApiError(
-        "Project is incomplete. Station/College is required before submission.",
-        400
-      );
+    // Increment version
+    project.version = (project.version || 1) + 1;
+    project.submittedAt = new Date();
+
+    if (keepSameReviewer && project.assignedReviewerId) {
+      // Directly go to UNDER_REVIEW - same reviewer
+      project.status = "UNDER_REVIEW";
+      project.underReviewAt = new Date();
+    } else {
+      // Go to SUBMITTED - waiting for new reviewer assignment
+      project.status = "SUBMITTED";
+      project.assignedReviewerId = null; // Clear old reviewer
+      project.assignedAt = null;
+      project.underReviewAt = null;
     }
-
-    if (!project.discipline) {
-      throw new ApiError(
-        "Project is incomplete. Discipline is required before submission.",
-        400
-      );
-    }
-
-    project.status = "SUBMITTED";
-    project.submittedAt = new Date(); // Set submitted timestamp
-
+    
     await project.save();
 
+    // Run similarity check
+    runSimilarityCheckInBackground(project._id, project);
+
     return res.status(200).json({
-      message: "Project submitted successfully",
+      message: keepSameReviewer && project.assignedReviewerId
+        ? "Project resubmitted. The same reviewer will be notified for re-review."
+        : "Project resubmitted. Awaiting admin to assign a new reviewer.",
       project: {
         id: project._id,
         uniqueCode: project.uniqueCode,
         title: project.title,
         status: project.status,
+        version: project.version,
+        assignedReviewer: project.assignedReviewerId,
         submittedAt: project.submittedAt
       }
     });
@@ -190,10 +203,6 @@ export const submitProject = async (req, res, next) => {
     next(error);
   }
 };
-
-
-
-
 
 
 // // Get all projects for scientist (with new schema)
